@@ -1,0 +1,29 @@
+# Visual Studio temporary files
+.vs/
+x64/
+Debug/
+Release/
+
+# User-specific Visual Studio files
+*.user
+*.suo
+*.rsuser
+
+# Build outputs
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.log
+*.tlog
+*.lastbuildstate
+*.idb
+*.ipdb
+*.iobj
+
+# VS Code settings, optional
+.vscode/
+
+# Runtime generated files
+bank_data.txt
+statement_*.txt
