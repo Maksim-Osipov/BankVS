@@ -10,5 +10,6 @@
 class HistoryDialog {
 public:
     static void Show(HINSTANCE hInstance, HWND owner, Bank& bank,
-                     const std::function<void(const std::wstring&)>& outputCallback);
+                     const std::function<void(const std::wstring&)>& outputCallback,
+                     int prefilledAccountId = -1);
 };

@@ -92,6 +92,7 @@ namespace {
             DialogUtils::CreateLabelAndEdit(hwnd, L"Сумма:", ID_EDIT_AMOUNT, 20, 96, 180, 220);
             DialogUtils::CreateButton(hwnd, L"Перевести", ID_BTN_TRANSFER, 200, 145, 120, 32);
             DialogUtils::CreateButton(hwnd, L"Отмена", ID_BTN_CANCEL, 335, 145, 95, 32);
+            SetFocus(GetDlgItem(hwnd, ID_EDIT_FROM));
         }
 
         void Transfer() {
@@ -121,6 +122,16 @@ namespace {
                     return 0;
                 }
                 if (LOWORD(wParam) == ID_BTN_CANCEL && HIWORD(wParam) == BN_CLICKED) {
+                    DestroyWindow(hwnd);
+                    return 0;
+                }
+                break;
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN) {
+                    Transfer();
+                    return 0;
+                }
+                if (wParam == VK_ESCAPE) {
                     DestroyWindow(hwnd);
                     return 0;
                 }

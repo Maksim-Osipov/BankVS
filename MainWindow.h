@@ -38,8 +38,15 @@ private:
     HWND statusText;
     HWND statsGroup;
     HWND tableGroup;
+    HWND selectedGroup;
+    HWND selectedInfo;
+    HWND selectedDepositButton;
+    HWND selectedWithdrawButton;
+    HWND selectedHistoryButton;
+    HWND selectedStatementButton;
     HWND logGroup;
     std::array<HWND, 7> statsLabels;
+    int selectedAccountId;
     bool closeAutoSaved;
 
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -52,6 +59,10 @@ private:
     void ProcessCommand(int commandId);
     void RefreshAccountTable();
     void RefreshStatisticsPanel();
+    void RefreshSelectedAccountPanel();
+    void HandleAccountSelectionChanged();
+    bool RequireSelectedAccount(int& id);
+    void GenerateStatementForAccount(int id);
     void SetStatus(const std::wstring& text);
     void ShowAboutDialog();
     void AutoSave();

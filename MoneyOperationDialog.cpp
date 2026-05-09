@@ -25,9 +25,10 @@ namespace {
     class Dialog {
     public:
         Dialog(HINSTANCE hInstance, HWND owner, Bank& bank, MoneyOperationType operationType,
-               const std::function<void(const std::wstring&)>& outputCallback)
+               const std::function<void(const std::wstring&)>& outputCallback,
+               int prefilledAccountId)
             : hInstance(hInstance), owner(owner), bank(bank), operationType(operationType),
-              outputCallback(outputCallback), hwnd(nullptr) {
+              outputCallback(outputCallback), hwnd(nullptr), prefilledAccountId(prefilledAccountId) {
         }
 
         bool Create() {
@@ -86,6 +87,7 @@ namespace {
         MoneyOperationType operationType;
         std::function<void(const std::wstring&)> outputCallback;
         HWND hwnd;
+        int prefilledAccountId;
 
         void Register() {
             WNDCLASSW windowClass {};
@@ -104,6 +106,12 @@ namespace {
                                       operationType == MoneyOperationType::Deposit ? L"Пополнить" : L"Снять",
                                       ID_BTN_APPLY, 150, 108, 120, 32);
             DialogUtils::CreateButton(hwnd, L"Отмена", ID_BTN_CANCEL, 285, 108, 95, 32);
+            if (prefilledAccountId > 0) {
+                SetWindowTextW(GetDlgItem(hwnd, ID_EDIT_ID), std::to_wstring(prefilledAccountId).c_str());
+                SetFocus(GetDlgItem(hwnd, ID_EDIT_AMOUNT));
+            } else {
+                SetFocus(GetDlgItem(hwnd, ID_EDIT_ID));
+            }
         }
 
         void Apply() {
@@ -130,6 +138,16 @@ namespace {
             case WM_CREATE:
                 CreateControls();
                 return 0;
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN) {
+                    Apply();
+                    return 0;
+                }
+                if (wParam == VK_ESCAPE) {
+                    DestroyWindow(hwnd);
+                    return 0;
+                }
+                break;
             case WM_COMMAND:
                 if (LOWORD(wParam) == ID_BTN_APPLY && HIWORD(wParam) == BN_CLICKED) {
                     Apply();
@@ -152,8 +170,9 @@ namespace {
 }
 
 void MoneyOperationDialog::Show(HINSTANCE hInstance, HWND owner, Bank& bank, MoneyOperationType operationType,
-                                const std::function<void(const std::wstring&)>& outputCallback) {
-    Dialog* dialog = new Dialog(hInstance, owner, bank, operationType, outputCallback);
+                                const std::function<void(const std::wstring&)>& outputCallback,
+                                int prefilledAccountId) {
+    Dialog* dialog = new Dialog(hInstance, owner, bank, operationType, outputCallback, prefilledAccountId);
     if (!dialog->Create()) {
         delete dialog;
         MessageBoxW(owner, L"Не удалось открыть окно операции со счётом.", L"Ошибка", MB_OK | MB_ICONERROR);

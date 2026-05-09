@@ -17,9 +17,10 @@ namespace {
     class Dialog {
     public:
         Dialog(HINSTANCE hInstance, HWND owner, Bank& bank,
-               const std::function<void(const std::wstring&)>& outputCallback)
+               const std::function<void(const std::wstring&)>& outputCallback,
+               int prefilledAccountId)
             : hInstance(hInstance), owner(owner), bank(bank), outputCallback(outputCallback),
-              hwnd(nullptr), outputEdit(nullptr) {
+              hwnd(nullptr), outputEdit(nullptr), prefilledAccountId(prefilledAccountId) {
         }
 
         bool Create() {
@@ -68,6 +69,7 @@ namespace {
         std::function<void(const std::wstring&)> outputCallback;
         HWND hwnd;
         HWND outputEdit;
+        int prefilledAccountId;
 
         void Register() {
             WNDCLASSW windowClass {};
@@ -84,6 +86,11 @@ namespace {
             DialogUtils::CreateButton(hwnd, L"Показать историю", ID_BTN_SHOW, 320, 18, 160, 30);
             DialogUtils::CreateButton(hwnd, L"Закрыть", ID_BTN_CLOSE, 500, 18, 100, 30);
             outputEdit = DialogUtils::CreateOutputEdit(hwnd, ID_EDIT_OUTPUT, 20, 65, 700, 390);
+            if (prefilledAccountId > 0) {
+                SetWindowTextW(GetDlgItem(hwnd, ID_EDIT_ID), std::to_wstring(prefilledAccountId).c_str());
+                ShowHistory();
+            }
+            SetFocus(GetDlgItem(hwnd, ID_EDIT_ID));
         }
 
         void ResizeControls() {
@@ -128,6 +135,16 @@ namespace {
                     return 0;
                 }
                 break;
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN) {
+                    ShowHistory();
+                    return 0;
+                }
+                if (wParam == VK_ESCAPE) {
+                    DestroyWindow(hwnd);
+                    return 0;
+                }
+                break;
             case WM_CLOSE:
                 DestroyWindow(hwnd);
                 return 0;
@@ -140,8 +157,9 @@ namespace {
 }
 
 void HistoryDialog::Show(HINSTANCE hInstance, HWND owner, Bank& bank,
-                         const std::function<void(const std::wstring&)>& outputCallback) {
-    Dialog* dialog = new Dialog(hInstance, owner, bank, outputCallback);
+                         const std::function<void(const std::wstring&)>& outputCallback,
+                         int prefilledAccountId) {
+    Dialog* dialog = new Dialog(hInstance, owner, bank, outputCallback, prefilledAccountId);
     if (!dialog->Create()) {
         delete dialog;
         MessageBoxW(owner, L"Не удалось открыть окно истории операций.", L"Ошибка", MB_OK | MB_ICONERROR);

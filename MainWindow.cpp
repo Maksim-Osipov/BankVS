@@ -14,6 +14,7 @@
 #include "UiHelpers.h"
 
 #include <commctrl.h>
+#include <shellapi.h>
 
 #include <exception>
 #include <iomanip>
@@ -41,6 +42,10 @@ namespace {
     constexpr int ID_MENU_ABOUT = 1014;
     constexpr int ID_BTN_SEARCH_ACCOUNT = 1015;
     constexpr int ID_BTN_DELETE_ACCOUNT = 1016;
+    constexpr int ID_BTN_SELECTED_DEPOSIT = 1017;
+    constexpr int ID_BTN_SELECTED_WITHDRAW = 1018;
+    constexpr int ID_BTN_SELECTED_HISTORY = 1019;
+    constexpr int ID_BTN_SELECTED_STATEMENT = 1020;
 
     constexpr int ID_EDIT_OUTPUT = 1100;
     constexpr int ID_LIST_ACCOUNTS = 1101;
@@ -48,6 +53,8 @@ namespace {
     constexpr int ID_GROUP_STATS = 1103;
     constexpr int ID_GROUP_TABLE = 1104;
     constexpr int ID_GROUP_LOG = 1105;
+    constexpr int ID_GROUP_SELECTED = 1106;
+    constexpr int ID_SELECTED_INFO = 1107;
 
     const wchar_t* MainWindowClassName() {
         return L"BankVSMainWindowClass";
@@ -83,6 +90,14 @@ namespace {
     void SetItemText(HWND listView, int row, int column, const std::wstring& text) {
         ListView_SetItemText(listView, row, column, const_cast<LPWSTR>(text.c_str()));
     }
+
+    std::wstring StatementPathText(int id) {
+        return L"statements\\statement_" + std::to_wstring(id) + L".txt";
+    }
+
+    std::string StatementPathUtf8(int id) {
+        return "statements/statement_" + std::to_string(id) + ".txt";
+    }
 }
 
 MainWindow::MainWindow(HINSTANCE hInstance, Bank& bank)
@@ -94,8 +109,15 @@ MainWindow::MainWindow(HINSTANCE hInstance, Bank& bank)
       statusText(nullptr),
       statsGroup(nullptr),
       tableGroup(nullptr),
+      selectedGroup(nullptr),
+      selectedInfo(nullptr),
+      selectedDepositButton(nullptr),
+      selectedWithdrawButton(nullptr),
+      selectedHistoryButton(nullptr),
+      selectedStatementButton(nullptr),
       logGroup(nullptr),
       statsLabels {},
+      selectedAccountId(-1),
       closeAutoSaved(false) {
 }
 
@@ -137,6 +159,13 @@ bool MainWindow::Create(int nCmdShow) {
 int MainWindow::Run() {
     MSG message {};
     while (GetMessageW(&message, nullptr, 0, 0)) {
+        if (message.message == WM_KEYDOWN && (message.wParam == VK_RETURN || message.wParam == VK_ESCAPE)) {
+            HWND root = GetAncestor(message.hwnd, GA_ROOT);
+            if (root && root != hwnd) {
+                SendMessageW(root, WM_KEYDOWN, message.wParam, message.lParam);
+                continue;
+            }
+        }
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
@@ -245,8 +274,9 @@ void MainWindow::CreateControls() {
     addButton(L"Выход", ID_BTN_EXIT);
 
     statsGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Краткая статистика", BS_GROUPBOX, 310, 14, 860, 130, ID_GROUP_STATS);
-    tableGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Счета", BS_GROUPBOX, 310, 152, 860, 312, ID_GROUP_TABLE);
-    logGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Журнал", BS_GROUPBOX, 310, 474, 860, 180, ID_GROUP_LOG);
+    tableGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Счета", BS_GROUPBOX, 310, 152, 860, 250, ID_GROUP_TABLE);
+    selectedGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Выбранный счёт", BS_GROUPBOX, 310, 412, 860, 118, ID_GROUP_SELECTED);
+    logGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Журнал", BS_GROUPBOX, 310, 540, 860, 114, ID_GROUP_LOG);
 
     for (std::size_t i = 0; i < statsLabels.size(); ++i) {
         const int x = i < 4 ? 330 : 720;
@@ -279,7 +309,14 @@ void MainWindow::CreateControls() {
         InsertColumn(accountListView, 5, 180, L"Лимит / овердрафт");
     }
 
-    outputEdit = DialogUtils::CreateOutputEdit(hwnd, ID_EDIT_OUTPUT, 330, 498, 820, 132);
+    selectedInfo = DialogUtils::CreateControl(hwnd, L"STATIC", L"Счёт не выбран",
+                                              SS_LEFT, 330, 438, 500, 72, ID_SELECTED_INFO);
+    selectedDepositButton = DialogUtils::CreateButton(hwnd, L"Пополнить", ID_BTN_SELECTED_DEPOSIT, 850, 438, 105, 30);
+    selectedWithdrawButton = DialogUtils::CreateButton(hwnd, L"Снять", ID_BTN_SELECTED_WITHDRAW, 965, 438, 90, 30);
+    selectedHistoryButton = DialogUtils::CreateButton(hwnd, L"История", ID_BTN_SELECTED_HISTORY, 850, 478, 105, 30);
+    selectedStatementButton = DialogUtils::CreateButton(hwnd, L"Выписка", ID_BTN_SELECTED_STATEMENT, 965, 478, 90, 30);
+
+    outputEdit = DialogUtils::CreateOutputEdit(hwnd, ID_EDIT_OUTPUT, 330, 564, 820, 66);
     statusText = DialogUtils::CreateControlEx(hwnd, WS_EX_CLIENTEDGE, L"STATIC", L"",
                                               SS_LEFT | SS_CENTERIMAGE, 0, 0, 0, 0, ID_STATUS_TEXT);
 
@@ -288,6 +325,7 @@ void MainWindow::CreateControls() {
     AutoLoad();
     RefreshAccountTable();
     RefreshStatisticsPanel();
+    RefreshSelectedAccountPanel();
 }
 
 void MainWindow::ResizeControls() {
@@ -302,10 +340,12 @@ void MainWindow::ResizeControls() {
     const int bottom = static_cast<int>(rect.bottom) - statusHeight - margin;
     const int statsHeight = 130;
     const int gap = 10;
-    const int logHeight = 160;
+    const int selectedHeight = 118;
+    const int logHeight = 125;
     const int tableY = 14 + statsHeight + gap;
-    const int tableHeight = bottom - tableY - logHeight - gap;
-    const int logY = tableY + tableHeight + gap;
+    const int tableHeight = bottom - tableY - selectedHeight - logHeight - gap * 2;
+    const int selectedY = tableY + tableHeight + gap;
+    const int logY = selectedY + selectedHeight + gap;
 
     if (statusText) {
         MoveWindow(statusText, 0, rect.bottom - statusHeight, rect.right, statusHeight, TRUE);
@@ -315,6 +355,9 @@ void MainWindow::ResizeControls() {
     }
     if (tableGroup) {
         MoveWindow(tableGroup, dataX, tableY, dataWidth, tableHeight, TRUE);
+    }
+    if (selectedGroup) {
+        MoveWindow(selectedGroup, dataX, selectedY, dataWidth, selectedHeight, TRUE);
     }
     if (logGroup) {
         MoveWindow(logGroup, dataX, logY, dataWidth, logHeight, TRUE);
@@ -340,6 +383,21 @@ void MainWindow::ResizeControls() {
     if (outputEdit) {
         MoveWindow(outputEdit, dataX + 20, logY + 26, dataWidth - 40, logHeight - 46, TRUE);
     }
+    if (selectedInfo) {
+        MoveWindow(selectedInfo, dataX + 20, selectedY + 28, dataWidth - 360, selectedHeight - 44, TRUE);
+    }
+    if (selectedDepositButton) {
+        MoveWindow(selectedDepositButton, dataX + dataWidth - 320, selectedY + 30, 140, 30, TRUE);
+    }
+    if (selectedWithdrawButton) {
+        MoveWindow(selectedWithdrawButton, dataX + dataWidth - 165, selectedY + 30, 125, 30, TRUE);
+    }
+    if (selectedHistoryButton) {
+        MoveWindow(selectedHistoryButton, dataX + dataWidth - 320, selectedY + 68, 140, 30, TRUE);
+    }
+    if (selectedStatementButton) {
+        MoveWindow(selectedStatementButton, dataX + dataWidth - 165, selectedY + 68, 125, 30, TRUE);
+    }
 }
 
 void MainWindow::RefreshAccountTable() {
@@ -360,6 +418,12 @@ void MainWindow::RefreshAccountTable() {
         item.iSubItem = 0;
         item.pszText = const_cast<LPWSTR>(idText.c_str());
         ListView_InsertItem(accountListView, &item);
+        if (account->getId() == selectedAccountId) {
+            item.mask = LVIF_STATE;
+            item.stateMask = LVIS_SELECTED | LVIS_FOCUSED;
+            item.state = LVIS_SELECTED | LVIS_FOCUSED;
+            ListView_SetItem(accountListView, &item);
+        }
 
         SetItemText(accountListView, row, 1, UiHelpers::AccountTypeToRussian(account->getType()));
         SetItemText(accountListView, row, 2, DialogUtils::Utf8ToWide(account->getOwnerName()));
@@ -368,6 +432,8 @@ void MainWindow::RefreshAccountTable() {
         SetItemText(accountListView, row, 5, UiHelpers::GetAccountLimitText(account));
         ++row;
     }
+
+    RefreshSelectedAccountPanel();
 }
 
 void MainWindow::RefreshStatisticsPanel() {
@@ -407,6 +473,99 @@ void MainWindow::RefreshStatisticsPanel() {
     DialogUtils::SetText(statsLabels[4], L"Общий положительный баланс: " + UiHelpers::FormatMoney(positiveBalance));
     DialogUtils::SetText(statsLabels[5], L"Общий долг: " + UiHelpers::FormatMoney(totalDebt));
     DialogUtils::SetText(statsLabels[6], L"Операций в историях: " + std::to_wstring(operationCount));
+}
+
+void MainWindow::RefreshSelectedAccountPanel() {
+    if (!selectedInfo) {
+        return;
+    }
+
+    const auto iterator = bank.getAccounts().find(selectedAccountId);
+    if (selectedAccountId < 0 || iterator == bank.getAccounts().end()) {
+        selectedAccountId = -1;
+        DialogUtils::SetText(selectedInfo, L"Счёт не выбран");
+        return;
+    }
+
+    const std::shared_ptr<Account>& account = iterator->second;
+    std::wstring text =
+        L"ID: " + std::to_wstring(account->getId()) + L"\r\n" +
+        L"Тип: " + UiHelpers::AccountTypeToRussian(account->getType()) + L"\r\n" +
+        L"Владелец: " + DialogUtils::Utf8ToWide(account->getOwnerName()) + L"\r\n" +
+        L"Баланс: " + UiHelpers::FormatMoney(account->getBalance()) + L" ₽";
+
+    const std::wstring rate = UiHelpers::GetAccountRateText(account);
+    if (rate != L"-") {
+        text += L"\r\nСтавка: " + rate;
+    }
+
+    const std::wstring limit = UiHelpers::GetAccountLimitText(account);
+    if (limit != L"-") {
+        text += L"\r\nЛимит / овердрафт: " + limit;
+    }
+
+    text += L"\r\nОпераций: " + std::to_wstring(account->getHistory().size());
+    DialogUtils::SetText(selectedInfo, text);
+}
+
+void MainWindow::HandleAccountSelectionChanged() {
+    selectedAccountId = -1;
+    const int row = ListView_GetNextItem(accountListView, -1, LVNI_SELECTED);
+    if (row >= 0) {
+        wchar_t buffer[64] {};
+        ListView_GetItemText(accountListView, row, 0, buffer, 64);
+        try {
+            selectedAccountId = std::stoi(buffer);
+        } catch (...) {
+            selectedAccountId = -1;
+        }
+    }
+
+    RefreshSelectedAccountPanel();
+}
+
+bool MainWindow::RequireSelectedAccount(int& id) {
+    const auto iterator = bank.getAccounts().find(selectedAccountId);
+    if (selectedAccountId < 0 || iterator == bank.getAccounts().end()) {
+        MessageBoxW(hwnd, L"Сначала выберите счёт в таблице.", L"Счёт не выбран", MB_OK | MB_ICONINFORMATION);
+        SetStatus(L"Счёт не выбран.");
+        return false;
+    }
+
+    id = selectedAccountId;
+    return true;
+}
+
+void MainWindow::GenerateStatementForAccount(int id) {
+    const std::wstring pathText = StatementPathText(id);
+    const DWORD attributes = GetFileAttributesW(pathText.c_str());
+    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
+        const int answer = MessageBoxW(hwnd,
+            L"Выписка для этого счёта уже существует. Перезаписать файл?",
+            L"Подтверждение",
+            MB_YESNO | MB_ICONQUESTION);
+        if (answer != IDYES) {
+            SetStatus(L"Создание выписки отменено.");
+            return;
+        }
+    }
+
+    bank.generateStatement(id, StatementPathUtf8(id));
+    const std::wstring message = L"Выписка создана: " + pathText;
+    AppendOutput(message);
+    SetStatus(message);
+
+    const int openAnswer = MessageBoxW(hwnd,
+        (message + L"\r\n\r\nОткрыть папку с выписками?").c_str(),
+        L"Выписка создана",
+        MB_YESNO | MB_ICONINFORMATION);
+    if (openAnswer == IDYES) {
+        HINSTANCE result = ShellExecuteW(hwnd, L"open", L"statements", nullptr, nullptr, SW_SHOWNORMAL);
+        if (reinterpret_cast<INT_PTR>(result) <= 32) {
+            MessageBoxW(hwnd, L"Не удалось открыть папку с выписками.", L"Ошибка", MB_OK | MB_ICONERROR);
+            SetStatus(L"Не удалось открыть папку с выписками.");
+        }
+    }
 }
 
 void MainWindow::SetStatus(const std::wstring& text) {
@@ -488,6 +647,7 @@ void MainWindow::ProcessCommand(int commandId) {
         SetStatus(text);
         RefreshAccountTable();
         RefreshStatisticsPanel();
+        RefreshSelectedAccountPanel();
     };
 
     const auto mutatingOutputCallback = [this](const std::wstring& text) {
@@ -495,6 +655,7 @@ void MainWindow::ProcessCommand(int commandId) {
         SetStatus(text);
         RefreshAccountTable();
         RefreshStatisticsPanel();
+        RefreshSelectedAccountPanel();
         if (!IsErrorMessage(text)) {
             AutoSave();
         }
@@ -517,6 +678,34 @@ void MainWindow::ProcessCommand(int commandId) {
         case ID_BTN_WITHDRAW:
             MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Withdraw, mutatingOutputCallback);
             break;
+        case ID_BTN_SELECTED_DEPOSIT: {
+            int id = -1;
+            if (RequireSelectedAccount(id)) {
+                MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Deposit, mutatingOutputCallback, id);
+            }
+            break;
+        }
+        case ID_BTN_SELECTED_WITHDRAW: {
+            int id = -1;
+            if (RequireSelectedAccount(id)) {
+                MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Withdraw, mutatingOutputCallback, id);
+            }
+            break;
+        }
+        case ID_BTN_SELECTED_HISTORY: {
+            int id = -1;
+            if (RequireSelectedAccount(id)) {
+                HistoryDialog::Show(hInstance, hwnd, bank, outputCallback, id);
+            }
+            break;
+        }
+        case ID_BTN_SELECTED_STATEMENT: {
+            int id = -1;
+            if (RequireSelectedAccount(id)) {
+                GenerateStatementForAccount(id);
+            }
+            break;
+        }
         case ID_BTN_TRANSFER:
             TransferDialog::Show(hInstance, hwnd, bank, mutatingOutputCallback);
             break;
@@ -538,9 +727,18 @@ void MainWindow::ProcessCommand(int commandId) {
             SetStatus(L"Данные успешно сохранены.");
             break;
         case ID_BTN_LOAD:
+            if (MessageBoxW(hwnd,
+                            L"Текущие данные будут заменены данными из файла. Продолжить?",
+                            L"Подтверждение загрузки",
+                            MB_YESNO | MB_ICONQUESTION) != IDYES) {
+                SetStatus(L"Загрузка данных отменена.");
+                break;
+            }
             FileManager::loadBank(bank, DATA_FILE);
+            selectedAccountId = -1;
             RefreshAccountTable();
             RefreshStatisticsPanel();
+            RefreshSelectedAccountPanel();
             AppendOutput(L"Данные успешно загружены из bank_data.txt.");
             SetStatus(L"Данные успешно загружены.");
             break;
@@ -598,13 +796,35 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_COMMAND:
         ProcessCommand(LOWORD(wParam));
         return 0;
+    case WM_NOTIFY: {
+        const LPNMHDR header = reinterpret_cast<LPNMHDR>(lParam);
+        if (header && header->idFrom == ID_LIST_ACCOUNTS && header->code == LVN_ITEMCHANGED) {
+            const LPNMLISTVIEW listNotification = reinterpret_cast<LPNMLISTVIEW>(lParam);
+            if ((listNotification->uChanged & LVIF_STATE) != 0) {
+                HandleAccountSelectionChanged();
+            }
+        }
+        return 0;
+    }
     case WM_CLOSE:
-        if (!closeAutoSaved) {
+    {
+        const int answer = MessageBoxW(hwnd,
+            L"Сохранить данные и выйти из программы?",
+            L"Выход",
+            MB_YESNOCANCEL | MB_ICONQUESTION);
+        if (answer == IDCANCEL) {
+            SetStatus(L"Выход отменён.");
+            return 0;
+        }
+        if (answer == IDYES && !closeAutoSaved) {
             AutoSave();
+            closeAutoSaved = true;
+        } else if (answer == IDNO) {
             closeAutoSaved = true;
         }
         DestroyWindow(hwnd);
         return 0;
+    }
     case WM_DESTROY:
         if (!closeAutoSaved) {
             AutoSave();

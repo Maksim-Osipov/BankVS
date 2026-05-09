@@ -121,6 +121,7 @@ namespace {
             DialogUtils::CreateButton(hwnd, L"Найти", ID_BTN_SEARCH, 455, 20, 110, 32);
             DialogUtils::CreateButton(hwnd, L"Закрыть", ID_BTN_CLOSE, 580, 20, 110, 32);
             resultsEdit = DialogUtils::CreateOutputEdit(hwnd, ID_EDIT_RESULTS, 20, 100, 700, 360);
+            SetFocus(GetDlgItem(hwnd, ID_EDIT_QUERY));
         }
 
         void ResizeControls() {
@@ -215,6 +216,16 @@ namespace {
                     return 0;
                 }
                 if (LOWORD(wParam) == ID_BTN_CLOSE && HIWORD(wParam) == BN_CLICKED) {
+                    DestroyWindow(hwnd);
+                    return 0;
+                }
+                break;
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN) {
+                    Search();
+                    return 0;
+                }
+                if (wParam == VK_ESCAPE) {
                     DestroyWindow(hwnd);
                     return 0;
                 }

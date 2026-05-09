@@ -90,6 +90,7 @@ namespace {
             DialogUtils::CreateLabelAndEdit(hwnd, L"ID счёта:", ID_EDIT_ID, 20, 24, 110, 240);
             DialogUtils::CreateButton(hwnd, L"Удалить", ID_BTN_DELETE, 145, 75, 120, 32);
             DialogUtils::CreateButton(hwnd, L"Отмена", ID_BTN_CANCEL, 280, 75, 100, 32);
+            SetFocus(GetDlgItem(hwnd, ID_EDIT_ID));
         }
 
         void DeleteAccount() {
@@ -120,6 +121,16 @@ namespace {
                     return 0;
                 }
                 if (LOWORD(wParam) == ID_BTN_CANCEL && HIWORD(wParam) == BN_CLICKED) {
+                    DestroyWindow(hwnd);
+                    return 0;
+                }
+                break;
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN) {
+                    DeleteAccount();
+                    return 0;
+                }
+                if (wParam == VK_ESCAPE) {
                     DestroyWindow(hwnd);
                     return 0;
                 }

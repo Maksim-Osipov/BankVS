@@ -2,6 +2,8 @@
 
 #include "DialogUtils.h"
 
+#include <shellapi.h>
+
 #include <exception>
 #include <string>
 
@@ -81,14 +83,40 @@ namespace {
             DialogUtils::CreateLabelAndEdit(hwnd, L"ID счёта:", ID_EDIT_ID, 20, 24, 120, 240);
             DialogUtils::CreateButton(hwnd, L"Сгенерировать выписку", ID_BTN_GENERATE, 145, 75, 180, 32);
             DialogUtils::CreateButton(hwnd, L"Отмена", ID_BTN_CANCEL, 335, 75, 70, 32);
+            SetFocus(GetDlgItem(hwnd, ID_EDIT_ID));
         }
 
         void Generate() {
             try {
                 const int id = DialogUtils::ReadInt(hwnd, ID_EDIT_ID, L"ID счёта");
                 const std::string filename = "statements/statement_" + std::to_string(id) + ".txt";
+                const std::wstring pathText = L"statements\\statement_" + std::to_wstring(id) + L".txt";
+                const DWORD attributes = GetFileAttributesW(pathText.c_str());
+                if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
+                    const int answer = MessageBoxW(hwnd,
+                        L"Выписка для этого счёта уже существует. Перезаписать файл?",
+                        L"Подтверждение",
+                        MB_YESNO | MB_ICONQUESTION);
+                    if (answer != IDYES) {
+                        outputCallback(L"Создание выписки отменено.");
+                        return;
+                    }
+                }
+
                 bank.generateStatement(id, filename);
-                outputCallback(L"Выписка создана: statements/statement_" + std::to_wstring(id) + L".txt");
+                const std::wstring message = L"Выписка создана: " + pathText;
+                outputCallback(message);
+                const int openAnswer = MessageBoxW(hwnd,
+                    (message + L"\r\n\r\nОткрыть папку с выписками?").c_str(),
+                    L"Выписка создана",
+                    MB_YESNO | MB_ICONINFORMATION);
+                if (openAnswer == IDYES) {
+                    HINSTANCE result = ShellExecuteW(hwnd, L"open", L"statements", nullptr, nullptr, SW_SHOWNORMAL);
+                    if (reinterpret_cast<INT_PTR>(result) <= 32) {
+                        MessageBoxW(hwnd, L"Не удалось открыть папку с выписками.", L"Ошибка", MB_OK | MB_ICONERROR);
+                        outputCallback(L"Не удалось открыть папку с выписками.");
+                    }
+                }
                 DestroyWindow(hwnd);
             } catch (const std::exception& ex) {
                 DialogUtils::ShowException(hwnd, ex, outputCallback);
@@ -106,6 +134,16 @@ namespace {
                     return 0;
                 }
                 if (LOWORD(wParam) == ID_BTN_CANCEL && HIWORD(wParam) == BN_CLICKED) {
+                    DestroyWindow(hwnd);
+                    return 0;
+                }
+                break;
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN) {
+                    Generate();
+                    return 0;
+                }
+                if (wParam == VK_ESCAPE) {
                     DestroyWindow(hwnd);
                     return 0;
                 }

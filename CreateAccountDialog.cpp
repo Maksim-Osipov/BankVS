@@ -112,6 +112,7 @@ namespace {
             DialogUtils::CreateButton(hwnd, L"Создать", ID_BTN_CREATE, 185, 265, 130, 32);
             DialogUtils::CreateButton(hwnd, L"Отмена", ID_BTN_CANCEL, 335, 265, 130, 32);
             UpdateFieldAvailability();
+            SetFocus(GetDlgItem(hwnd, ID_EDIT_ID));
         }
 
         int SelectedType() const {
@@ -169,6 +170,16 @@ namespace {
                     return 0;
                 }
                 if (LOWORD(wParam) == ID_BTN_CANCEL && HIWORD(wParam) == BN_CLICKED) {
+                    DestroyWindow(hwnd);
+                    return 0;
+                }
+                break;
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN) {
+                    CreateAccount();
+                    return 0;
+                }
+                if (wParam == VK_ESCAPE) {
                     DestroyWindow(hwnd);
                     return 0;
                 }

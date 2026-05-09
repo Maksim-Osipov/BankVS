@@ -82,6 +82,7 @@ namespace {
             DialogUtils::CreateButton(hwnd, L"Начислить по одному счёту", ID_BTN_ONE, 130, 72, 210, 32);
             DialogUtils::CreateButton(hwnd, L"Начислить всем счетам", ID_BTN_ALL, 130, 110, 210, 32);
             DialogUtils::CreateButton(hwnd, L"Отмена", ID_BTN_CANCEL, 355, 110, 80, 32);
+            SetFocus(GetDlgItem(hwnd, ID_EDIT_ID));
         }
 
         void ApplyOne() {
@@ -120,6 +121,16 @@ namespace {
                     return 0;
                 }
                 if (LOWORD(wParam) == ID_BTN_CANCEL && HIWORD(wParam) == BN_CLICKED) {
+                    DestroyWindow(hwnd);
+                    return 0;
+                }
+                break;
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN) {
+                    ApplyOne();
+                    return 0;
+                }
+                if (wParam == VK_ESCAPE) {
                     DestroyWindow(hwnd);
                     return 0;
                 }
