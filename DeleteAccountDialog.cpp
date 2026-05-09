@@ -1,17 +1,16 @@
-#include "StatementDialog.h"
+#include "DeleteAccountDialog.h"
 
 #include "DialogUtils.h"
 
 #include <exception>
-#include <string>
 
 namespace {
-    constexpr int ID_EDIT_ID = 7001;
-    constexpr int ID_BTN_GENERATE = 7002;
-    constexpr int ID_BTN_CANCEL = 7003;
+    constexpr int ID_EDIT_ID = 10001;
+    constexpr int ID_BTN_DELETE = 10002;
+    constexpr int ID_BTN_CANCEL = 10003;
 
     const wchar_t* ClassName() {
-        return L"BankVSStatementDialog";
+        return L"BankVSDeleteAccountDialog";
     }
 
     class Dialog {
@@ -23,10 +22,20 @@ namespace {
 
         bool Create() {
             Register();
-            hwnd = CreateWindowExW(WS_EX_DLGMODALFRAME, ClassName(), L"Выписка",
-                                   WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-                                   CW_USEDEFAULT, CW_USEDEFAULT, 430, 170,
-                                   owner, nullptr, hInstance, this);
+            hwnd = CreateWindowExW(
+                WS_EX_DLGMODALFRAME,
+                ClassName(),
+                L"Удаление счёта",
+                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                430,
+                165,
+                owner,
+                nullptr,
+                hInstance,
+                this);
+
             if (!hwnd) {
                 return false;
             }
@@ -78,17 +87,22 @@ namespace {
         }
 
         void CreateControls() {
-            DialogUtils::CreateLabelAndEdit(hwnd, L"ID счёта:", ID_EDIT_ID, 20, 24, 120, 240);
-            DialogUtils::CreateButton(hwnd, L"Сгенерировать выписку", ID_BTN_GENERATE, 145, 75, 180, 32);
-            DialogUtils::CreateButton(hwnd, L"Отмена", ID_BTN_CANCEL, 335, 75, 70, 32);
+            DialogUtils::CreateLabelAndEdit(hwnd, L"ID счёта:", ID_EDIT_ID, 20, 24, 110, 240);
+            DialogUtils::CreateButton(hwnd, L"Удалить", ID_BTN_DELETE, 145, 75, 120, 32);
+            DialogUtils::CreateButton(hwnd, L"Отмена", ID_BTN_CANCEL, 280, 75, 100, 32);
         }
 
-        void Generate() {
+        void DeleteAccount() {
             try {
                 const int id = DialogUtils::ReadInt(hwnd, ID_EDIT_ID, L"ID счёта");
-                const std::string filename = "statements/statement_" + std::to_string(id) + ".txt";
-                bank.generateStatement(id, filename);
-                outputCallback(L"Выписка создана: statements/statement_" + std::to_wstring(id) + L".txt");
+                const std::wstring question = L"Вы действительно хотите удалить счёт " + std::to_wstring(id) + L"?";
+                const int answer = MessageBoxW(hwnd, question.c_str(), L"Подтверждение удаления", MB_YESNO | MB_ICONQUESTION);
+                if (answer != IDYES) {
+                    return;
+                }
+
+                bank.removeAccount(id);
+                outputCallback(L"Счёт " + std::to_wstring(id) + L" удалён.");
                 DestroyWindow(hwnd);
             } catch (const std::exception& ex) {
                 DialogUtils::ShowException(hwnd, ex, outputCallback);
@@ -101,8 +115,8 @@ namespace {
                 CreateControls();
                 return 0;
             case WM_COMMAND:
-                if (LOWORD(wParam) == ID_BTN_GENERATE && HIWORD(wParam) == BN_CLICKED) {
-                    Generate();
+                if (LOWORD(wParam) == ID_BTN_DELETE && HIWORD(wParam) == BN_CLICKED) {
+                    DeleteAccount();
                     return 0;
                 }
                 if (LOWORD(wParam) == ID_BTN_CANCEL && HIWORD(wParam) == BN_CLICKED) {
@@ -121,11 +135,11 @@ namespace {
     };
 }
 
-void StatementDialog::Show(HINSTANCE hInstance, HWND owner, Bank& bank,
-                           const std::function<void(const std::wstring&)>& outputCallback) {
+void DeleteAccountDialog::Show(HINSTANCE hInstance, HWND owner, Bank& bank,
+                               const std::function<void(const std::wstring&)>& outputCallback) {
     Dialog* dialog = new Dialog(hInstance, owner, bank, outputCallback);
     if (!dialog->Create()) {
         delete dialog;
-        MessageBoxW(owner, L"Не удалось открыть окно выписки.", L"Ошибка", MB_OK | MB_ICONERROR);
+        MessageBoxW(owner, L"Не удалось открыть окно удаления счёта.", L"Ошибка", MB_OK | MB_ICONERROR);
     }
 }

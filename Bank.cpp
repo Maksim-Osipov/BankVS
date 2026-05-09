@@ -6,6 +6,7 @@
 #include "SavingsAccount.h"
 
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -213,19 +214,24 @@ void Bank::generateStatement(int id, const std::string& filename) const {
         throw InvalidAccountException("Account not found.");
     }
 
+    const std::filesystem::path statementPath(filename);
+    if (statementPath.has_parent_path()) {
+        std::filesystem::create_directories(statementPath.parent_path());
+    }
+
     std::ofstream file(filename);
     if (!file) {
         throw std::runtime_error("Cannot create statement file.");
     }
 
     const std::shared_ptr<Account>& account = it->second;
-    file << "BANK STATEMENT\n";
-    file << "Account ID: " << account->getId() << '\n';
-    file << "Owner: " << account->getOwnerName() << '\n';
-    file << "Type: " << account->getType() << '\n';
-    file << "Current balance: " << std::fixed << std::setprecision(2) << account->getBalance() << "\n\n";
+    file << "ВЫПИСКА ПО СЧЁТУ\n";
+    file << "ID счёта: " << account->getId() << '\n';
+    file << "Владелец: " << account->getOwnerName() << '\n';
+    file << "Тип счёта: " << accountTypeToRussian(account->getType()) << '\n';
+    file << "Текущий баланс: " << std::fixed << std::setprecision(2) << account->getBalance() << "\n\n";
 
-    file << "Transactions:\n";
+    file << "История операций:\n";
     for (const Transaction<double>& transaction : account->getHistory()) {
         file << transaction << '\n';
     }

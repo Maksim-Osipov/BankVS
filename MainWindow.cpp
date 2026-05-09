@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "CreateAccountDialog.h"
+#include "DeleteAccountDialog.h"
 #include "DialogUtils.h"
 #include "FileManager.h"
 #include "HistoryDialog.h"
@@ -9,6 +10,8 @@
 #include "StatementDialog.h"
 #include "StatisticsDialog.h"
 #include "TransferDialog.h"
+#include "SearchDialog.h"
+#include "UiHelpers.h"
 
 #include <commctrl.h>
 
@@ -36,6 +39,8 @@ namespace {
     constexpr int ID_BTN_CLEAR = 1012;
     constexpr int ID_BTN_EXIT = 1013;
     constexpr int ID_MENU_ABOUT = 1014;
+    constexpr int ID_BTN_SEARCH_ACCOUNT = 1015;
+    constexpr int ID_BTN_DELETE_ACCOUNT = 1016;
 
     constexpr int ID_EDIT_OUTPUT = 1100;
     constexpr int ID_LIST_ACCOUNTS = 1101;
@@ -46,26 +51,6 @@ namespace {
 
     const wchar_t* MainWindowClassName() {
         return L"BankVSMainWindowClass";
-    }
-
-    std::wstring AccountTypeToRussian(const std::string& type) {
-        if (type == "Savings") {
-            return L"Накопительный";
-        }
-        if (type == "Checking") {
-            return L"Расчётный";
-        }
-        if (type == "Credit") {
-            return L"Кредитный";
-        }
-
-        return DialogUtils::Utf8ToWide(type);
-    }
-
-    std::wstring FormatMoney(double value) {
-        std::wostringstream oss;
-        oss << std::fixed << std::setprecision(2) << value;
-        return oss.str();
     }
 
     std::wstring FirstLine(const std::wstring& text) {
@@ -192,6 +177,8 @@ void MainWindow::CreateMainMenu() {
     AppendMenuW(fileMenu, MF_STRING, ID_BTN_EXIT, L"Выход");
 
     AppendMenuW(operationsMenu, MF_STRING, ID_BTN_CREATE_ACCOUNT, L"Создать счёт");
+    AppendMenuW(operationsMenu, MF_STRING, ID_BTN_SEARCH_ACCOUNT, L"Найти счёт");
+    AppendMenuW(operationsMenu, MF_STRING, ID_BTN_DELETE_ACCOUNT, L"Удалить счёт");
     AppendMenuW(operationsMenu, MF_STRING, ID_BTN_DEPOSIT, L"Пополнить");
     AppendMenuW(operationsMenu, MF_STRING, ID_BTN_WITHDRAW, L"Снять");
     AppendMenuW(operationsMenu, MF_STRING, ID_BTN_TRANSFER, L"Перевести");
@@ -213,36 +200,58 @@ void MainWindow::CreateControls() {
     CreateMainMenu();
 
     const int leftX = 20;
-    const int topY = 46;
+    int y = 38;
     const int buttonWidth = 250;
-    const int buttonHeight = 34;
-    const int gap = 40;
+    const int buttonHeight = 28;
+    const int buttonGap = 32;
+    const int groupGap = 10;
 
-    DialogUtils::CreateLabel(hwnd, L"Операции", leftX, 16, 250, 22);
-    DialogUtils::CreateControl(hwnd, L"STATIC", L"", SS_ETCHEDFRAME, 12, 38, 274, 560, 0);
+    DialogUtils::CreateLabel(hwnd, L"Навигация", leftX, 14, 250, 22);
+    DialogUtils::CreateControl(hwnd, L"STATIC", L"", SS_ETCHEDFRAME, 12, 38, 274, 620, 0);
 
-    DialogUtils::CreateButton(hwnd, L"Создать счёт", ID_BTN_CREATE_ACCOUNT, leftX, topY + gap * 0, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Пополнить счёт", ID_BTN_DEPOSIT, leftX, topY + gap * 1, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Снять деньги", ID_BTN_WITHDRAW, leftX, topY + gap * 2, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Перевести деньги", ID_BTN_TRANSFER, leftX, topY + gap * 3, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Начислить проценты", ID_BTN_INTEREST, leftX, topY + gap * 4, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Показать все счета", ID_BTN_SHOW_ALL, leftX, topY + gap * 5, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"История операций", ID_BTN_HISTORY, leftX, topY + gap * 6, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Сохранить данные", ID_BTN_SAVE, leftX, topY + gap * 7, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Загрузить данные", ID_BTN_LOAD, leftX, topY + gap * 8, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Выписка", ID_BTN_STATEMENT, leftX, topY + gap * 9, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Статистика", ID_BTN_STATISTICS, leftX, topY + gap * 10, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Очистить вывод", ID_BTN_CLEAR, leftX, topY + gap * 11, buttonWidth, buttonHeight);
-    DialogUtils::CreateButton(hwnd, L"Выход", ID_BTN_EXIT, leftX, topY + gap * 12, buttonWidth, buttonHeight);
+    const auto addGroup = [&](const wchar_t* title, int height) {
+        DialogUtils::CreateControl(hwnd, L"BUTTON", title, BS_GROUPBOX, 18, y, 258, height, 0);
+        y += 24;
+    };
+    const auto addButton = [&](const wchar_t* title, int id) {
+        DialogUtils::CreateButton(hwnd, title, id, leftX, y, buttonWidth, buttonHeight);
+        y += buttonGap;
+    };
 
-    statsGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Краткая статистика", BS_GROUPBOX, 310, 14, 860, 112, ID_GROUP_STATS);
-    tableGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Счета", BS_GROUPBOX, 310, 134, 860, 330, ID_GROUP_TABLE);
+    addGroup(L"Счета", 150);
+    addButton(L"Создать счёт", ID_BTN_CREATE_ACCOUNT);
+    addButton(L"Найти счёт", ID_BTN_SEARCH_ACCOUNT);
+    addButton(L"Показать все счета", ID_BTN_SHOW_ALL);
+    addButton(L"Удалить счёт", ID_BTN_DELETE_ACCOUNT);
+    y += groupGap;
+
+    addGroup(L"Операции", 150);
+    addButton(L"Пополнить счёт", ID_BTN_DEPOSIT);
+    addButton(L"Снять деньги", ID_BTN_WITHDRAW);
+    addButton(L"Перевести деньги", ID_BTN_TRANSFER);
+    addButton(L"Начислить проценты", ID_BTN_INTEREST);
+    y += groupGap;
+
+    addGroup(L"Данные", 150);
+    addButton(L"Сохранить данные", ID_BTN_SAVE);
+    addButton(L"Загрузить данные", ID_BTN_LOAD);
+    addButton(L"Выписка", ID_BTN_STATEMENT);
+    addButton(L"Статистика", ID_BTN_STATISTICS);
+    y += groupGap;
+
+    addGroup(L"Прочее", 118);
+    addButton(L"О программе", ID_MENU_ABOUT);
+    addButton(L"Очистить вывод", ID_BTN_CLEAR);
+    addButton(L"Выход", ID_BTN_EXIT);
+
+    statsGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Краткая статистика", BS_GROUPBOX, 310, 14, 860, 130, ID_GROUP_STATS);
+    tableGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Счета", BS_GROUPBOX, 310, 152, 860, 312, ID_GROUP_TABLE);
     logGroup = DialogUtils::CreateControl(hwnd, L"BUTTON", L"Журнал", BS_GROUPBOX, 310, 474, 860, 180, ID_GROUP_LOG);
 
     for (std::size_t i = 0; i < statsLabels.size(); ++i) {
-        const int x = i < 3 ? 330 : 720;
-        const int y = 40 + static_cast<int>(i % 3) * 26;
-        statsLabels[i] = DialogUtils::CreateLabel(hwnd, L"", x, y, 360, 22);
+        const int x = i < 4 ? 330 : 720;
+        const int labelY = 40 + static_cast<int>(i % 4) * 24;
+        statsLabels[i] = DialogUtils::CreateLabel(hwnd, L"", x, labelY, 360, 22);
     }
 
     accountListView = CreateWindowExW(
@@ -262,10 +271,12 @@ void MainWindow::CreateControls() {
     if (accountListView) {
         SendMessageW(accountListView, WM_SETFONT, reinterpret_cast<WPARAM>(DialogUtils::DefaultFont()), TRUE);
         ListView_SetExtendedListViewStyle(accountListView, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
-        InsertColumn(accountListView, 0, 90, L"ID");
-        InsertColumn(accountListView, 1, 180, L"Тип счёта");
-        InsertColumn(accountListView, 2, 330, L"Владелец");
-        InsertColumn(accountListView, 3, 160, L"Баланс");
+        InsertColumn(accountListView, 0, 70, L"ID");
+        InsertColumn(accountListView, 1, 140, L"Тип счёта");
+        InsertColumn(accountListView, 2, 260, L"Владелец");
+        InsertColumn(accountListView, 3, 130, L"Баланс");
+        InsertColumn(accountListView, 4, 110, L"Ставка, %");
+        InsertColumn(accountListView, 5, 180, L"Лимит / овердрафт");
     }
 
     outputEdit = DialogUtils::CreateOutputEdit(hwnd, ID_EDIT_OUTPUT, 330, 498, 820, 132);
@@ -289,7 +300,7 @@ void MainWindow::ResizeControls() {
     const int statusHeight = 26;
     const int dataWidth = static_cast<int>(rect.right) - dataX - margin;
     const int bottom = static_cast<int>(rect.bottom) - statusHeight - margin;
-    const int statsHeight = 112;
+    const int statsHeight = 130;
     const int gap = 10;
     const int logHeight = 160;
     const int tableY = 14 + statsHeight + gap;
@@ -311,17 +322,19 @@ void MainWindow::ResizeControls() {
 
     for (std::size_t i = 0; i < statsLabels.size(); ++i) {
         const int columnWidth = (dataWidth - 60) / 2;
-        const int x = dataX + 20 + (i < 3 ? 0 : columnWidth + 20);
-        const int y = 40 + static_cast<int>(i % 3) * 26;
+        const int x = dataX + 20 + (i < 4 ? 0 : columnWidth + 20);
+        const int y = 40 + static_cast<int>(i % 4) * 24;
         MoveWindow(statsLabels[i], x, y, columnWidth, 22, TRUE);
     }
 
     if (accountListView) {
         MoveWindow(accountListView, dataX + 20, tableY + 26, dataWidth - 40, tableHeight - 46, TRUE);
-        ListView_SetColumnWidth(accountListView, 0, 90);
-        ListView_SetColumnWidth(accountListView, 1, 180);
-        ListView_SetColumnWidth(accountListView, 2, dataWidth > 700 ? dataWidth - 500 : 220);
-        ListView_SetColumnWidth(accountListView, 3, 160);
+        ListView_SetColumnWidth(accountListView, 0, 70);
+        ListView_SetColumnWidth(accountListView, 1, 140);
+        ListView_SetColumnWidth(accountListView, 2, dataWidth > 900 ? dataWidth - 770 : 220);
+        ListView_SetColumnWidth(accountListView, 3, 130);
+        ListView_SetColumnWidth(accountListView, 4, 110);
+        ListView_SetColumnWidth(accountListView, 5, 180);
     }
 
     if (outputEdit) {
@@ -348,9 +361,11 @@ void MainWindow::RefreshAccountTable() {
         item.pszText = const_cast<LPWSTR>(idText.c_str());
         ListView_InsertItem(accountListView, &item);
 
-        SetItemText(accountListView, row, 1, AccountTypeToRussian(account->getType()));
+        SetItemText(accountListView, row, 1, UiHelpers::AccountTypeToRussian(account->getType()));
         SetItemText(accountListView, row, 2, DialogUtils::Utf8ToWide(account->getOwnerName()));
-        SetItemText(accountListView, row, 3, FormatMoney(account->getBalance()));
+        SetItemText(accountListView, row, 3, UiHelpers::FormatMoney(account->getBalance()));
+        SetItemText(accountListView, row, 4, UiHelpers::GetAccountRateText(account));
+        SetItemText(accountListView, row, 5, UiHelpers::GetAccountLimitText(account));
         ++row;
     }
 }
@@ -360,12 +375,14 @@ void MainWindow::RefreshStatisticsPanel() {
     int checkingCount = 0;
     int creditCount = 0;
     double positiveBalance = 0.0;
-    double creditDebt = 0.0;
+    double totalDebt = 0.0;
+    std::size_t operationCount = 0;
 
     for (const auto& pair : bank.getAccounts()) {
         const std::shared_ptr<Account>& account = pair.second;
         const std::string type = account->getType();
         const double balance = account->getBalance();
+        operationCount += account->getHistory().size();
 
         if (type == "Savings") {
             ++savingsCount;
@@ -373,13 +390,12 @@ void MainWindow::RefreshStatisticsPanel() {
             ++checkingCount;
         } else if (type == "Credit") {
             ++creditCount;
-            if (balance < 0.0) {
-                creditDebt += -balance;
-            }
         }
 
         if (balance > 0.0) {
             positiveBalance += balance;
+        } else if (balance < 0.0) {
+            totalDebt += -balance;
         }
     }
 
@@ -388,8 +404,9 @@ void MainWindow::RefreshStatisticsPanel() {
     DialogUtils::SetText(statsLabels[1], L"Накопительных счетов: " + std::to_wstring(savingsCount));
     DialogUtils::SetText(statsLabels[2], L"Расчётных счетов: " + std::to_wstring(checkingCount));
     DialogUtils::SetText(statsLabels[3], L"Кредитных счетов: " + std::to_wstring(creditCount));
-    DialogUtils::SetText(statsLabels[4], L"Общий положительный баланс: " + FormatMoney(positiveBalance));
-    DialogUtils::SetText(statsLabels[5], L"Общий долг по кредитным счетам: " + FormatMoney(creditDebt));
+    DialogUtils::SetText(statsLabels[4], L"Общий положительный баланс: " + UiHelpers::FormatMoney(positiveBalance));
+    DialogUtils::SetText(statsLabels[5], L"Общий долг: " + UiHelpers::FormatMoney(totalDebt));
+    DialogUtils::SetText(statsLabels[6], L"Операций в историях: " + std::to_wstring(operationCount));
 }
 
 void MainWindow::SetStatus(const std::wstring& text) {
@@ -403,9 +420,22 @@ void MainWindow::ShowAboutDialog() {
         L"Банковская система\r\n"
         L"Учебный проект по информатике\r\n"
         L"C++17, WinAPI\r\n\r\n"
-        L"Использованные темы:\r\n"
-        L"ООП, наследование, полиморфизм, шаблоны, исключения,\r\n"
-        L"STL, файлы, перегрузка операторов.";
+        L"В проекте используются:\r\n"
+        L"- классы и объекты;\r\n"
+        L"- наследование;\r\n"
+        L"- полиморфизм;\r\n"
+        L"- виртуальные методы;\r\n"
+        L"- абстрактный класс;\r\n"
+        L"- шаблонный класс Transaction<T>;\r\n"
+        L"- исключения;\r\n"
+        L"- перегрузка операторов;\r\n"
+        L"- std::map;\r\n"
+        L"- std::vector;\r\n"
+        L"- std::shared_ptr;\r\n"
+        L"- работа с файлами;\r\n"
+        L"- многофайловая структура;\r\n"
+        L"- автоматическое сохранение и загрузка;\r\n"
+        L"- оконный интерфейс WinAPI.";
 
     MessageBoxW(hwnd, text, L"О программе", MB_OK | MB_ICONINFORMATION);
     SetStatus(L"Открыта справка о программе.");
@@ -414,6 +444,7 @@ void MainWindow::ShowAboutDialog() {
 void MainWindow::AutoSave() {
     try {
         FileManager::saveBank(bank, DATA_FILE);
+        SetStatus(L"Данные автоматически сохранены.");
     } catch (const std::exception& ex) {
         std::wstring message = L"Не удалось автоматически сохранить данные в bank_data.txt.";
         const std::wstring details = DialogUtils::Utf8ToWide(ex.what());
@@ -473,6 +504,12 @@ void MainWindow::ProcessCommand(int commandId) {
         switch (commandId) {
         case ID_BTN_CREATE_ACCOUNT:
             CreateAccountDialog::Show(hInstance, hwnd, bank, mutatingOutputCallback);
+            break;
+        case ID_BTN_SEARCH_ACCOUNT:
+            SearchDialog::Show(hInstance, hwnd, bank, outputCallback);
+            break;
+        case ID_BTN_DELETE_ACCOUNT:
+            DeleteAccountDialog::Show(hInstance, hwnd, bank, mutatingOutputCallback);
             break;
         case ID_BTN_DEPOSIT:
             MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Deposit, mutatingOutputCallback);

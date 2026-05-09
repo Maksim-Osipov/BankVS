@@ -39,7 +39,7 @@ private:
     HWND statsGroup;
     HWND tableGroup;
     HWND logGroup;
-    std::array<HWND, 6> statsLabels;
+    std::array<HWND, 7> statsLabels;
     bool closeAutoSaved;
 
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
