@@ -16,6 +16,7 @@
 
 #include "Bank.h"
 
+#include <array>
 #include <string>
 
 class MainWindow {
@@ -33,12 +34,23 @@ private:
     Bank& bank;
     HWND hwnd;
     HWND outputEdit;
+    HWND accountListView;
+    HWND statusText;
+    HWND statsGroup;
+    HWND tableGroup;
+    HWND logGroup;
+    std::array<HWND, 6> statsLabels;
 
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam);
 
     bool RegisterWindowClass();
+    void CreateMainMenu();
     void CreateControls();
     void ResizeControls();
     void ProcessCommand(int commandId);
+    void RefreshAccountTable();
+    void RefreshStatisticsPanel();
+    void SetStatus(const std::wstring& text);
+    void ShowAboutDialog();
 };

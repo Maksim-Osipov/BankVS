@@ -1,0 +1,8 @@
+BANK STATEMENT
+Account ID: 1
+Owner: ваиекл
+Type: Savings
+Current balance: 15555.00
+
+Transactions:
+2026-05-09   | Deposit          |   10000.00
