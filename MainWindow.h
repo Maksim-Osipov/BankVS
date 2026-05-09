@@ -40,6 +40,7 @@ private:
     HWND tableGroup;
     HWND logGroup;
     std::array<HWND, 6> statsLabels;
+    bool closeAutoSaved;
 
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam);
@@ -53,4 +54,6 @@ private:
     void RefreshStatisticsPanel();
     void SetStatus(const std::wstring& text);
     void ShowAboutDialog();
+    void AutoSave();
+    void AutoLoad();
 };

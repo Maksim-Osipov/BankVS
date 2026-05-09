@@ -3,6 +3,7 @@
 #include "Exceptions.h"
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace DialogUtils {
     std::wstring Utf8ToWide(const std::string& text) {
@@ -119,6 +120,35 @@ namespace DialogUtils {
         }
 
         return value;
+    }
+
+    double ParsePercentInput(const std::wstring& text) {
+        std::wstring normalized = text;
+        std::replace(normalized.begin(), normalized.end(), L',', L'.');
+
+        if (normalized.empty()) {
+            throw InvalidAmountException(WideToUtf8(L"Ошибка: введите корректную процентную ставку."));
+        }
+
+        std::size_t processed = 0;
+        double percent = 0.0;
+        try {
+            percent = std::stod(normalized, &processed);
+        } catch (const std::invalid_argument&) {
+            throw InvalidAmountException(WideToUtf8(L"Ошибка: введите корректную процентную ставку."));
+        } catch (const std::out_of_range&) {
+            throw InvalidAmountException(WideToUtf8(L"Ошибка: введите корректную процентную ставку."));
+        }
+
+        if (processed != normalized.size() || percent == 0.0) {
+            throw InvalidAmountException(WideToUtf8(L"Ошибка: введите корректную процентную ставку."));
+        }
+
+        if (percent < 0.0 || percent > 100.0) {
+            throw InvalidAmountException(WideToUtf8(L"Ошибка: процентная ставка должна быть от 0 до 100."));
+        }
+
+        return percent / 100.0;
     }
 
     std::string ReadRequiredUtf8Text(HWND parent, int id, const wchar_t* fieldName) {
@@ -251,6 +281,11 @@ namespace DialogUtils {
     }
 
     std::wstring BuildErrorMessage(const std::exception& ex) {
+        const std::wstring details = Utf8ToWide(ex.what());
+        if (details.rfind(L"Ошибка:", 0) == 0) {
+            return details;
+        }
+
         std::wstring message = L"Ошибка: операция не выполнена.";
 
         if (dynamic_cast<const InvalidAccountException*>(&ex)) {
@@ -261,7 +296,6 @@ namespace DialogUtils {
             message = L"Ошибка: недостаточно средств или превышен лимит.";
         }
 
-        const std::wstring details = Utf8ToWide(ex.what());
         if (!details.empty()) {
             message += L"\r\n";
             message += details;

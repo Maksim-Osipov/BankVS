@@ -54,7 +54,7 @@ void CreditAccount::applyInterest() {
 void CreditAccount::print(std::ostream& os) const {
     Account::print(os);
     os << ", Credit limit: " << std::fixed << std::setprecision(2) << creditLimit
-       << ", Interest rate: " << interestRate;
+       << ", Interest rate: " << interestRate * 100.0 << "%";
 }
 
 void CreditAccount::serialize(std::ostream& os) const {

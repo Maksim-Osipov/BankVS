@@ -42,7 +42,7 @@ void SavingsAccount::applyInterest() {
 
 void SavingsAccount::print(std::ostream& os) const {
     Account::print(os);
-    os << ", Interest rate: " << std::fixed << std::setprecision(2) << interestRate;
+    os << ", Interest rate: " << std::fixed << std::setprecision(2) << interestRate * 100.0 << "%";
 }
 
 void SavingsAccount::serialize(std::ostream& os) const {

@@ -15,10 +15,13 @@
 #include <exception>
 #include <iomanip>
 #include <sstream>
+#include <string>
 
 #pragma comment(lib, "Comctl32.lib")
 
 namespace {
+    const std::string DATA_FILE = "bank_data.txt";
+
     constexpr int ID_BTN_CREATE_ACCOUNT = 1001;
     constexpr int ID_BTN_DEPOSIT = 1002;
     constexpr int ID_BTN_WITHDRAW = 1003;
@@ -74,6 +77,15 @@ namespace {
         return text.substr(0, position);
     }
 
+    bool IsErrorMessage(const std::wstring& text) {
+        return text.rfind(L"Ошибка:", 0) == 0 || text.rfind(L"Не удалось", 0) == 0;
+    }
+
+    bool DataFileExists() {
+        const DWORD attributes = GetFileAttributesW(L"bank_data.txt");
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    }
+
     void InsertColumn(HWND listView, int index, int width, const wchar_t* title) {
         LVCOLUMNW column {};
         column.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
@@ -98,7 +110,8 @@ MainWindow::MainWindow(HINSTANCE hInstance, Bank& bank)
       statsGroup(nullptr),
       tableGroup(nullptr),
       logGroup(nullptr),
-      statsLabels {} {
+      statsLabels {},
+      closeAutoSaved(false) {
 }
 
 bool MainWindow::Create(int nCmdShow) {
@@ -261,6 +274,7 @@ void MainWindow::CreateControls() {
 
     AppendOutput(L"Банковская система готова к работе.");
     SetStatus(L"Готово.");
+    AutoLoad();
     RefreshAccountTable();
     RefreshStatisticsPanel();
 }
@@ -397,6 +411,46 @@ void MainWindow::ShowAboutDialog() {
     SetStatus(L"Открыта справка о программе.");
 }
 
+void MainWindow::AutoSave() {
+    try {
+        FileManager::saveBank(bank, DATA_FILE);
+    } catch (const std::exception& ex) {
+        std::wstring message = L"Не удалось автоматически сохранить данные в bank_data.txt.";
+        const std::wstring details = DialogUtils::Utf8ToWide(ex.what());
+        if (!details.empty()) {
+            message += L"\r\n";
+            message += details;
+        }
+
+        AppendOutput(message);
+        SetStatus(L"Ошибка автоматического сохранения.");
+        MessageBoxW(hwnd, message.c_str(), L"Ошибка сохранения", MB_OK | MB_ICONERROR);
+    }
+}
+
+void MainWindow::AutoLoad() {
+    if (!DataFileExists()) {
+        return;
+    }
+
+    try {
+        FileManager::loadBank(bank, DATA_FILE);
+        AppendOutput(L"Данные автоматически загружены из bank_data.txt.");
+        SetStatus(L"Данные автоматически загружены.");
+    } catch (const std::exception& ex) {
+        std::wstring message = L"Не удалось автоматически загрузить данные из bank_data.txt. Возможно, файл повреждён.";
+        const std::wstring details = DialogUtils::Utf8ToWide(ex.what());
+        if (!details.empty()) {
+            message += L"\r\n";
+            message += details;
+        }
+
+        AppendOutput(message);
+        SetStatus(L"Ошибка автоматической загрузки.");
+        MessageBoxW(hwnd, message.c_str(), L"Ошибка загрузки", MB_OK | MB_ICONWARNING);
+    }
+}
+
 void MainWindow::ProcessCommand(int commandId) {
     const auto outputCallback = [this](const std::wstring& text) {
         AppendOutput(text);
@@ -405,22 +459,32 @@ void MainWindow::ProcessCommand(int commandId) {
         RefreshStatisticsPanel();
     };
 
+    const auto mutatingOutputCallback = [this](const std::wstring& text) {
+        AppendOutput(text);
+        SetStatus(text);
+        RefreshAccountTable();
+        RefreshStatisticsPanel();
+        if (!IsErrorMessage(text)) {
+            AutoSave();
+        }
+    };
+
     try {
         switch (commandId) {
         case ID_BTN_CREATE_ACCOUNT:
-            CreateAccountDialog::Show(hInstance, hwnd, bank, outputCallback);
+            CreateAccountDialog::Show(hInstance, hwnd, bank, mutatingOutputCallback);
             break;
         case ID_BTN_DEPOSIT:
-            MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Deposit, outputCallback);
+            MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Deposit, mutatingOutputCallback);
             break;
         case ID_BTN_WITHDRAW:
-            MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Withdraw, outputCallback);
+            MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Withdraw, mutatingOutputCallback);
             break;
         case ID_BTN_TRANSFER:
-            TransferDialog::Show(hInstance, hwnd, bank, outputCallback);
+            TransferDialog::Show(hInstance, hwnd, bank, mutatingOutputCallback);
             break;
         case ID_BTN_INTEREST:
-            InterestDialog::Show(hInstance, hwnd, bank, outputCallback);
+            InterestDialog::Show(hInstance, hwnd, bank, mutatingOutputCallback);
             break;
         case ID_BTN_SHOW_ALL:
             RefreshAccountTable();
@@ -432,12 +496,12 @@ void MainWindow::ProcessCommand(int commandId) {
             HistoryDialog::Show(hInstance, hwnd, bank, outputCallback);
             break;
         case ID_BTN_SAVE:
-            FileManager::saveBank(bank, "bank_data.txt");
+            FileManager::saveBank(bank, DATA_FILE);
             AppendOutput(L"Данные успешно сохранены в bank_data.txt.");
             SetStatus(L"Данные успешно сохранены.");
             break;
         case ID_BTN_LOAD:
-            FileManager::loadBank(bank, "bank_data.txt");
+            FileManager::loadBank(bank, DATA_FILE);
             RefreshAccountTable();
             RefreshStatisticsPanel();
             AppendOutput(L"Данные успешно загружены из bank_data.txt.");
@@ -497,7 +561,18 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_COMMAND:
         ProcessCommand(LOWORD(wParam));
         return 0;
+    case WM_CLOSE:
+        if (!closeAutoSaved) {
+            AutoSave();
+            closeAutoSaved = true;
+        }
+        DestroyWindow(hwnd);
+        return 0;
     case WM_DESTROY:
+        if (!closeAutoSaved) {
+            AutoSave();
+            closeAutoSaved = true;
+        }
         PostQuitMessage(0);
         return 0;
     default:

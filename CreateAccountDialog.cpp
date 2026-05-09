@@ -105,7 +105,7 @@ namespace {
             DialogUtils::CreateLabelAndEdit(hwnd, L"ID:", ID_EDIT_ID, 20, 60, 155, 280);
             DialogUtils::CreateLabelAndEdit(hwnd, L"ФИО владельца:", ID_EDIT_OWNER, 20, 92, 155, 280);
             DialogUtils::CreateLabelAndEdit(hwnd, L"Начальный баланс:", ID_EDIT_BALANCE, 20, 124, 155, 280);
-            DialogUtils::CreateLabelAndEdit(hwnd, L"Процентная ставка:", ID_EDIT_RATE, 20, 156, 155, 280);
+            DialogUtils::CreateLabelAndEdit(hwnd, L"Процентная ставка, %", ID_EDIT_RATE, 20, 156, 155, 280);
             DialogUtils::CreateLabelAndEdit(hwnd, L"Лимит овердрафта:", ID_EDIT_OVERDRAFT, 20, 188, 155, 280);
             DialogUtils::CreateLabelAndEdit(hwnd, L"Кредитный лимит:", ID_EDIT_CREDIT, 20, 220, 155, 280);
 
@@ -134,7 +134,7 @@ namespace {
                 const double balance = DialogUtils::ReadDouble(hwnd, ID_EDIT_BALANCE, L"Начальный баланс");
 
                 if (type == 0) {
-                    const double rate = DialogUtils::ReadDouble(hwnd, ID_EDIT_RATE, L"Процентная ставка");
+                    const double rate = DialogUtils::ParsePercentInput(DialogUtils::GetControlText(hwnd, ID_EDIT_RATE));
                     bank.createSavingsAccount(id, ownerName, balance, rate);
                     outputCallback(L"Накопительный счёт успешно создан. ID: " + std::to_wstring(id) + L".");
                 } else if (type == 1) {
@@ -143,7 +143,7 @@ namespace {
                     outputCallback(L"Расчётный счёт успешно создан. ID: " + std::to_wstring(id) + L".");
                 } else {
                     const double creditLimit = DialogUtils::ReadDouble(hwnd, ID_EDIT_CREDIT, L"Кредитный лимит");
-                    const double rate = DialogUtils::ReadDouble(hwnd, ID_EDIT_RATE, L"Процентная ставка");
+                    const double rate = DialogUtils::ParsePercentInput(DialogUtils::GetControlText(hwnd, ID_EDIT_RATE));
                     bank.createCreditAccount(id, ownerName, balance, creditLimit, rate);
                     outputCallback(L"Кредитный счёт успешно создан. ID: " + std::to_wstring(id) + L".");
                 }

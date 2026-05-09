@@ -29,6 +29,7 @@ namespace DialogUtils {
 
     int ReadInt(HWND parent, int id, const wchar_t* fieldName);
     double ReadDouble(HWND parent, int id, const wchar_t* fieldName);
+    double ParsePercentInput(const std::wstring& text);
     std::string ReadRequiredUtf8Text(HWND parent, int id, const wchar_t* fieldName);
 
     HFONT DefaultFont();
