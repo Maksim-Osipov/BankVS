@@ -14,7 +14,6 @@
 #include "UiHelpers.h"
 
 #include <commctrl.h>
-#include <shellapi.h>
 
 #include <exception>
 #include <iomanip>
@@ -42,10 +41,6 @@ namespace {
     constexpr int ID_MENU_ABOUT = 1014;
     constexpr int ID_BTN_SEARCH_ACCOUNT = 1015;
     constexpr int ID_BTN_DELETE_ACCOUNT = 1016;
-    constexpr int ID_BTN_SELECTED_DEPOSIT = 1017;
-    constexpr int ID_BTN_SELECTED_WITHDRAW = 1018;
-    constexpr int ID_BTN_SELECTED_HISTORY = 1019;
-    constexpr int ID_BTN_SELECTED_STATEMENT = 1020;
 
     constexpr int ID_EDIT_OUTPUT = 1100;
     constexpr int ID_LIST_ACCOUNTS = 1101;
@@ -91,13 +86,6 @@ namespace {
         ListView_SetItemText(listView, row, column, const_cast<LPWSTR>(text.c_str()));
     }
 
-    std::wstring StatementPathText(int id) {
-        return L"statements\\statement_" + std::to_wstring(id) + L".txt";
-    }
-
-    std::string StatementPathUtf8(int id) {
-        return "statements/statement_" + std::to_string(id) + ".txt";
-    }
 }
 
 MainWindow::MainWindow(HINSTANCE hInstance, Bank& bank)
@@ -111,10 +99,6 @@ MainWindow::MainWindow(HINSTANCE hInstance, Bank& bank)
       tableGroup(nullptr),
       selectedGroup(nullptr),
       selectedInfo(nullptr),
-      selectedDepositButton(nullptr),
-      selectedWithdrawButton(nullptr),
-      selectedHistoryButton(nullptr),
-      selectedStatementButton(nullptr),
       logGroup(nullptr),
       statsLabels {},
       selectedAccountId(-1),
@@ -310,11 +294,7 @@ void MainWindow::CreateControls() {
     }
 
     selectedInfo = DialogUtils::CreateControl(hwnd, L"STATIC", L"Счёт не выбран",
-                                              SS_LEFT, 330, 438, 500, 72, ID_SELECTED_INFO);
-    selectedDepositButton = DialogUtils::CreateButton(hwnd, L"Пополнить", ID_BTN_SELECTED_DEPOSIT, 850, 438, 105, 30);
-    selectedWithdrawButton = DialogUtils::CreateButton(hwnd, L"Снять", ID_BTN_SELECTED_WITHDRAW, 965, 438, 90, 30);
-    selectedHistoryButton = DialogUtils::CreateButton(hwnd, L"История", ID_BTN_SELECTED_HISTORY, 850, 478, 105, 30);
-    selectedStatementButton = DialogUtils::CreateButton(hwnd, L"Выписка", ID_BTN_SELECTED_STATEMENT, 965, 478, 90, 30);
+                                              SS_LEFT, 330, 438, 820, 72, ID_SELECTED_INFO);
 
     outputEdit = DialogUtils::CreateOutputEdit(hwnd, ID_EDIT_OUTPUT, 330, 564, 820, 66);
     statusText = DialogUtils::CreateControlEx(hwnd, WS_EX_CLIENTEDGE, L"STATIC", L"",
@@ -384,19 +364,7 @@ void MainWindow::ResizeControls() {
         MoveWindow(outputEdit, dataX + 20, logY + 26, dataWidth - 40, logHeight - 46, TRUE);
     }
     if (selectedInfo) {
-        MoveWindow(selectedInfo, dataX + 20, selectedY + 28, dataWidth - 360, selectedHeight - 44, TRUE);
-    }
-    if (selectedDepositButton) {
-        MoveWindow(selectedDepositButton, dataX + dataWidth - 320, selectedY + 30, 140, 30, TRUE);
-    }
-    if (selectedWithdrawButton) {
-        MoveWindow(selectedWithdrawButton, dataX + dataWidth - 165, selectedY + 30, 125, 30, TRUE);
-    }
-    if (selectedHistoryButton) {
-        MoveWindow(selectedHistoryButton, dataX + dataWidth - 320, selectedY + 68, 140, 30, TRUE);
-    }
-    if (selectedStatementButton) {
-        MoveWindow(selectedStatementButton, dataX + dataWidth - 165, selectedY + 68, 125, 30, TRUE);
+        MoveWindow(selectedInfo, dataX + 20, selectedY + 28, dataWidth - 40, selectedHeight - 44, TRUE);
     }
 }
 
@@ -524,50 +492,6 @@ void MainWindow::HandleAccountSelectionChanged() {
     RefreshSelectedAccountPanel();
 }
 
-bool MainWindow::RequireSelectedAccount(int& id) {
-    const auto iterator = bank.getAccounts().find(selectedAccountId);
-    if (selectedAccountId < 0 || iterator == bank.getAccounts().end()) {
-        MessageBoxW(hwnd, L"Сначала выберите счёт в таблице.", L"Счёт не выбран", MB_OK | MB_ICONINFORMATION);
-        SetStatus(L"Счёт не выбран.");
-        return false;
-    }
-
-    id = selectedAccountId;
-    return true;
-}
-
-void MainWindow::GenerateStatementForAccount(int id) {
-    const std::wstring pathText = StatementPathText(id);
-    const DWORD attributes = GetFileAttributesW(pathText.c_str());
-    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-        const int answer = MessageBoxW(hwnd,
-            L"Выписка для этого счёта уже существует. Перезаписать файл?",
-            L"Подтверждение",
-            MB_YESNO | MB_ICONQUESTION);
-        if (answer != IDYES) {
-            SetStatus(L"Создание выписки отменено.");
-            return;
-        }
-    }
-
-    bank.generateStatement(id, StatementPathUtf8(id));
-    const std::wstring message = L"Выписка создана: " + pathText;
-    AppendOutput(message);
-    SetStatus(message);
-
-    const int openAnswer = MessageBoxW(hwnd,
-        (message + L"\r\n\r\nОткрыть папку с выписками?").c_str(),
-        L"Выписка создана",
-        MB_YESNO | MB_ICONINFORMATION);
-    if (openAnswer == IDYES) {
-        HINSTANCE result = ShellExecuteW(hwnd, L"open", L"statements", nullptr, nullptr, SW_SHOWNORMAL);
-        if (reinterpret_cast<INT_PTR>(result) <= 32) {
-            MessageBoxW(hwnd, L"Не удалось открыть папку с выписками.", L"Ошибка", MB_OK | MB_ICONERROR);
-            SetStatus(L"Не удалось открыть папку с выписками.");
-        }
-    }
-}
-
 void MainWindow::SetStatus(const std::wstring& text) {
     if (statusText) {
         SetWindowTextW(statusText, (L"  " + FirstLine(text)).c_str());
@@ -678,34 +602,6 @@ void MainWindow::ProcessCommand(int commandId) {
         case ID_BTN_WITHDRAW:
             MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Withdraw, mutatingOutputCallback);
             break;
-        case ID_BTN_SELECTED_DEPOSIT: {
-            int id = -1;
-            if (RequireSelectedAccount(id)) {
-                MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Deposit, mutatingOutputCallback, id);
-            }
-            break;
-        }
-        case ID_BTN_SELECTED_WITHDRAW: {
-            int id = -1;
-            if (RequireSelectedAccount(id)) {
-                MoneyOperationDialog::Show(hInstance, hwnd, bank, MoneyOperationType::Withdraw, mutatingOutputCallback, id);
-            }
-            break;
-        }
-        case ID_BTN_SELECTED_HISTORY: {
-            int id = -1;
-            if (RequireSelectedAccount(id)) {
-                HistoryDialog::Show(hInstance, hwnd, bank, outputCallback, id);
-            }
-            break;
-        }
-        case ID_BTN_SELECTED_STATEMENT: {
-            int id = -1;
-            if (RequireSelectedAccount(id)) {
-                GenerateStatementForAccount(id);
-            }
-            break;
-        }
         case ID_BTN_TRANSFER:
             TransferDialog::Show(hInstance, hwnd, bank, mutatingOutputCallback);
             break;

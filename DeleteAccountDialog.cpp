@@ -3,6 +3,8 @@
 #include "DialogUtils.h"
 
 #include <exception>
+#include <filesystem>
+#include <string>
 
 namespace {
     constexpr int ID_EDIT_ID = 10001;
@@ -103,7 +105,26 @@ namespace {
                 }
 
                 bank.removeAccount(id);
-                outputCallback(L"Счёт " + std::to_wstring(id) + L" удалён.");
+
+                bool statementDeleteFailed = false;
+                try {
+                    const std::filesystem::path statementPath =
+                        std::filesystem::path("statements") /
+                        ("statement_" + std::to_string(id) + ".txt");
+
+                    if (std::filesystem::exists(statementPath) && !std::filesystem::remove(statementPath)) {
+                        statementDeleteFailed = true;
+                    }
+                } catch (const std::exception&) {
+                    statementDeleteFailed = true;
+                }
+
+                std::wstring message = L"Счёт " + std::to_wstring(id) + L" удалён.";
+                if (statementDeleteFailed) {
+                    message += L"\r\nСчёт удалён, но файл выписки удалить не удалось.";
+                }
+
+                outputCallback(message);
                 DestroyWindow(hwnd);
             } catch (const std::exception& ex) {
                 DialogUtils::ShowException(hwnd, ex, outputCallback);
